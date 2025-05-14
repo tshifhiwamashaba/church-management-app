@@ -29,6 +29,13 @@ finances = pd.read_csv("data/finances.csv")
 groups = pd.read_csv("data/cell_groups.csv")
 events = pd.read_csv("data/events.csv")
 
+# Add Month and Week Columns
+members['Month'] = pd.to_datetime(members['Join_Date']).dt.to_period('M')
+members['Week'] = pd.to_datetime(members['Join_Date']).dt.strftime('%Y-%U')
+
+finances['Month'] = pd.to_datetime(finances['Date']).dt.to_period('M')
+finances['Week'] = pd.to_datetime(finances['Date']).dt.strftime('%Y-%U')
+
 # Members
 if page == "Members":
     st.header("👥 Add a New Member")
@@ -45,6 +52,15 @@ if page == "Members":
     st.subheader("Current Members")
     st.dataframe(members)
 
+    # Group members by month or week
+    group_by = st.selectbox("Group by", ["Month", "Week"])
+    if group_by == "Month":
+        month_counts = members.groupby('Month').size()
+        st.write(month_counts)
+    elif group_by == "Week":
+        week_counts = members.groupby('Week').size()
+        st.write(week_counts)
+
 # Finances
 elif page == "Finances":
     st.header("💰 Record Financial Entry")
@@ -60,6 +76,15 @@ elif page == "Finances":
             st.warning("Enter an amount.")
     st.subheader("Finance Records")
     st.dataframe(finances)
+
+    # Group finances by month or week
+    group_by = st.selectbox("Group by", ["Month", "Week"], key="finances")
+    if group_by == "Month":
+        month_sums = finances.groupby('Month')['Amount'].sum()
+        st.write(month_sums)
+    elif group_by == "Week":
+        week_sums = finances.groupby('Week')['Amount'].sum()
+        st.write(week_sums)
 
 # Cell Groups
 elif page == "Cell Groups":
@@ -97,3 +122,10 @@ elif page == "Dashboard":
     st.metric("Cell Groups", len(groups["Group_Name"].unique()))
     st.metric("Upcoming Events", len(events[events["Date"] >= str(datetime.today().date())]))
     st.bar_chart(finances.groupby("Type")["Amount"].sum())
+
+    # Show monthly or weekly financial summary
+    show_by = st.selectbox("Show Financial Summary by", ["Month", "Week"], key="dashboard")
+    if show_by == "Month":
+        st.bar_chart(finances.groupby('Month')['Amount'].sum())
+    elif show_by == "Week":
+        st.bar_chart(finances.groupby('Week')['Amount'].sum())
