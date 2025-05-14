@@ -3,129 +3,58 @@ import pandas as pd
 import os
 from datetime import datetime
 
-# Ensure data folder and CSVs exist
-data_files = {
-    "members.csv": ["Name", "Phone", "Join_Date"],
-    "finances.csv": ["Date", "Type", "Amount"],
-    "cell_groups.csv": ["Group_Name", "Member_Name"],
-    "events.csv": ["Event_Name", "Date"]
-}
-os.makedirs("data", exist_ok=True)
-for file, cols in data_files.items():
-    path = f"data/{file}"
-    if not os.path.exists(path):
-        pd.DataFrame(columns=cols).to_csv(path, index=False)
-
-st.title("📊 Church Management Dashboard")
-
-# Sidebar Navigation
-page = st.sidebar.selectbox("Select Page", [
-    "Members", "Finances", "Cell Groups", "Events", "Dashboard"
-])
-
 # Load data
-members = pd.read_csv("data/members.csv")
 finances = pd.read_csv("data/finances.csv")
-groups = pd.read_csv("data/cell_groups.csv")
-events = pd.read_csv("data/events.csv")
-
-# Add Month and Week Columns
-members['Month'] = pd.to_datetime(members['Join_Date']).dt.to_period('M')
-members['Week'] = pd.to_datetime(members['Join_Date']).dt.strftime('%Y-%U')
-
-finances['Month'] = pd.to_datetime(finances['Date']).dt.to_period('M')
-finances['Week'] = pd.to_datetime(finances['Date']).dt.strftime('%Y-%U')
-
-# Members
-if page == "Members":
-    st.header("👥 Add a New Member")
-    name = st.text_input("Full Name")
-    phone = st.text_input("Phone Number")
-    if st.button("Add Member"):
-        if name and phone:
-            new = pd.DataFrame([[name, phone, datetime.today().date()]], columns=["Name", "Phone", "Join_Date"])
-            members = pd.concat([members, new], ignore_index=True)
-            members.to_csv("data/members.csv", index=False)
-            st.success("Member added!")
-        else:
-            st.warning("Please fill in all fields.")
-    st.subheader("Current Members")
-    st.dataframe(members)
-
-    # Group members by month or week
-    group_by = st.selectbox("Group by", ["Month", "Week"])
-    if group_by == "Month":
-        month_counts = members.groupby('Month').size()
-        st.write(month_counts)
-    elif group_by == "Week":
-        week_counts = members.groupby('Week').size()
-        st.write(week_counts)
 
 # Finances
-elif page == "Finances":
-    st.header("💰 Record Financial Entry")
+st.header("💰 Record or Edit Financial Entry")
+
+# Select a finance entry to edit or leave blank to add new
+finance_to_edit = st.selectbox("Select a finance entry to edit or leave blank to add new", [""] + finances["Date"].tolist())
+
+# If a finance entry is selected, pre-populate the details
+if finance_to_edit:
+    finance = finances[finances["Date"] == finance_to_edit].iloc[0]
+    f_type = st.selectbox("Type", ["Offering", "Tithe", "Other"], index=["Offering", "Tithe", "Other"].index(finance["Type"]))
+    amount = st.number_input("Amount", min_value=0.0, value=finance["Amount"])
+    date = st.date_input("Date", value=pd.to_datetime(finance["Date"]).date())
+else:
+    # If no finance entry is selected, allow entering details for a new entry
     f_type = st.selectbox("Type", ["Offering", "Tithe", "Other"])
     amount = st.number_input("Amount", min_value=0.0)
-    if st.button("Add Finance"):
-        if amount > 0:
-            new = pd.DataFrame([[datetime.today().date(), f_type, amount]], columns=["Date", "Type", "Amount"])
-            finances = pd.concat([finances, new], ignore_index=True)
+    date = st.date_input("Date")
+
+if st.button("Save Finance Entry"):
+    if amount > 0:
+        # If editing an existing finance entry, update the row
+        if finance_to_edit:
+            updated_finance = pd.DataFrame([[date, f_type, amount]], columns=["Date", "Type", "Amount"])
+            finances.loc[finances["Date"] == finance_to_edit, ["Date", "Type", "Amount"]] = updated_finance.iloc[0]
             finances.to_csv("data/finances.csv", index=False)
-            st.success("Finance recorded!")
+            st.success("Finance entry updated!")
         else:
-            st.warning("Enter an amount.")
-    st.subheader("Finance Records")
-    st.dataframe(finances)
+            # If adding a new finance entry, append the row
+            new_finance = pd.DataFrame([[date, f_type, amount]], columns=["Date", "Type", "Amount"])
+            finances = pd.concat([finances, new_finance], ignore_index=True)
+            finances.to_csv("data/finances.csv", index=False)
+            st.success("New finance entry added!")
+    else:
+        st.warning("Please enter a valid amount.")
 
-    # Group finances by month or week
-    group_by = st.selectbox("Group by", ["Month", "Week"], key="finances")
-    if group_by == "Month":
-        month_sums = finances.groupby('Month')['Amount'].sum()
-        st.write(month_sums)
-    elif group_by == "Week":
-        week_sums = finances.groupby('Week')['Amount'].sum()
-        st.write(week_sums)
+st.subheader("Finance Records")
+st.dataframe(finances)
 
-# Cell Groups
-elif page == "Cell Groups":
-    st.header("🧑‍🤝‍🧑 Assign to Cell Group")
-    group = st.text_input("Group Name")
-    member = st.selectbox("Member", members["Name"].tolist())
-    if st.button("Assign Member"):
-        if group:
-            new = pd.DataFrame([[group, member]], columns=["Group_Name", "Member_Name"])
-            groups = pd.concat([groups, new], ignore_index=True)
-            groups.to_csv("data/cell_groups.csv", index=False)
-            st.success("Member assigned!")
-    st.subheader("Cell Group Assignments")
-    st.dataframe(groups)
-
-# Events
-elif page == "Events":
-    st.header("📅 Add New Event")
-    event = st.text_input("Event Name")
-    date = st.date_input("Event Date")
-    if st.button("Add Event"):
-        if event:
-            new = pd.DataFrame([[event, date]], columns=["Event_Name", "Date"])
-            events = pd.concat([events, new], ignore_index=True)
-            events.to_csv("data/events.csv", index=False)
-            st.success("Event added!")
-    st.subheader("Upcoming Events")
-    st.dataframe(events)
-
-# Dashboard
-elif page == "Dashboard":
-    st.header("📈 Dashboard Summary")
-    st.metric("Total Members", len(members))
-    st.metric("Total Finance Entries", len(finances))
-    st.metric("Cell Groups", len(groups["Group_Name"].unique()))
-    st.metric("Upcoming Events", len(events[events["Date"] >= str(datetime.today().date())]))
-    st.bar_chart(finances.groupby("Type")["Amount"].sum())
-
-    # Show monthly or weekly financial summary
-    show_by = st.selectbox("Show Financial Summary by", ["Month", "Week"], key="dashboard")
-    if show_by == "Month":
-        st.bar_chart(finances.groupby('Month')['Amount'].sum())
-    elif show_by == "Week":
-        st.bar_chart(finances.groupby('Week')['Amount'].sum())
+# Group finances by month or week
+group_by = st.selectbox("Group by", ["Month", "Week"], key="finances")
+if group_by == "Month":
+    # Add Month column if it's not already present
+    if 'Month' not in finances.columns:
+        finances['Month'] = pd.to_datetime(finances['Date']).dt.to_period('M')
+    month_sums = finances.groupby('Month')['Amount'].sum()
+    st.write(month_sums)
+elif group_by == "Week":
+    # Add Week column if it's not already present
+    if 'Week' not in finances.columns:
+        finances['Week'] = pd.to_datetime(finances['Date']).dt.strftime('%Y-%U')
+    week_sums = finances.groupby('Week')['Amount'].sum()
+    st.write(week_sums)
